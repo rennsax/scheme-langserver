@@ -513,6 +513,7 @@
 (symbol-hashtable-ref (something? <- (inner:list? hashtable? something? something?)))
 (symbol-hashtable-set! (void? <- (inner:list? hashtable? something? something?)))
 (symbol-hashtable-update! (void? <- (inner:list? hashtable? something? something? (something? <- something?) something?)))
+(symbol->string (string? <- (inner:list? symbol?)))
 (syntax-violation? (boolean? <- (inner:list? something?)))
 (tan (number? <- (inner:list? number?)))
 (tanh (number? <- (inner:list? number?)))
