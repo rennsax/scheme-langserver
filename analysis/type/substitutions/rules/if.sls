@@ -23,9 +23,11 @@
           (guard-for document index-node 'if '(chezscheme) '(rnrs) '(rnrs base) '(scheme))
           (let ([condition-index-node (cadr children)]
               [return-index-node (car (reverse children))])
-            `((,(index-node-variable condition-index-node) = something?))
-            (construct-substitutions-between-index-nodes index-node return-index-node '=)
-            (construct-substitutions-between-index-nodes return-index-node index-node '=))]
+            (append
+              `((,(index-node-variable condition-index-node) = something?)
+                (,(index-node-variable index-node) = void?))
+              (construct-substitutions-between-index-nodes index-node return-index-node '=)
+              (construct-substitutions-between-index-nodes return-index-node index-node '=)))]
         [('if _  clause0 clause1) 
           (guard-for document index-node 'lambda '(chezscheme) '(rnrs) '(rnrs base) '(scheme))
           (let ([condition-index-node (cadr children)]
