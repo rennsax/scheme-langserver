@@ -5,7 +5,7 @@
 #!r6rs
 
 (import 
-    (rnrs (6)) 
+    (chezscheme) 
     (srfi :64 testing) 
     (scheme-langserver virtual-file-system file-node)
     (scheme-langserver virtual-file-system index-node)
@@ -63,7 +63,7 @@
 (test-end)
 
 (test-begin "library-import-process")
-    (let* ( [workspace (init-workspace (current-directory) #f #t #f)]  
+    (let* ( [workspace (init-workspace (current-directory) #f #f)]  
             [root-file-node (workspace-file-node workspace)]
             [root-library-node (workspace-library-node workspace)]
             [target-file-node (walk-file root-file-node (string-append (current-directory) "/run.ss"))]
@@ -72,7 +72,7 @@
             'init-server
             (find 
                 (lambda (identifier) (equal? identifier 'init-server))
-                (map identifier-reference-identifier (document-reference-list document)))))
+                (map identifier-reference-identifier (document-ordered-reference-list document)))))
 (test-end)
 
 (exit (if (zero? (test-runner-fail-count (test-runner-get))) 0 1))

@@ -32,17 +32,24 @@
       [bias (text+position->int text position)]
       [fuzzy (refresh-workspace-for workspace file-node)]
       [index-node-list (document-index-node-list document)]
-      [target-index-node (pick-index-node-from index-node-list bias)]
+      [pre-target-index-node (pick-index-node-from index-node-list bias)]
+      [target-index-node 
+        (if pre-target-index-node
+          (if (null? (index-node-children pre-target-index-node))
+            pre-target-index-node
+            (pick-index-node-from index-node-list (- bias 1)))
+          pre-target-index-node)]
       [prefix 
         (if target-index-node 
-          (if (null? (index-node-children target-index-node)) 
-            (if (null? (annotation-stripped (index-node-datum/annotations target-index-node)))
-              ""
-              (symbol->string (annotation-stripped (index-node-datum/annotations target-index-node))))
+          (if (and (null? (index-node-children target-index-node)) (symbol? (index-node-datum/annotations target-index-node)))
+            (symbol->string (annotation-stripped (index-node-datum/annotations target-index-node)))
             ""))]
       [whole-list
         (filter 
-          (lambda (candidate-reference) (string-prefix? prefix (symbol->string (identifier-reference-identifier candidate-reference)))) 
+          (lambda (candidate-reference) 
+            (if (equal? "" prefix)
+              #f
+              (string-prefix? prefix (symbol->string (identifier-reference-identifier candidate-reference))))) 
           (find-available-references-for document target-index-node))]
       [type-inference? (workspace-type-inference? workspace)])
     ; https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#completionList

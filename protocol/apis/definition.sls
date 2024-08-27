@@ -39,15 +39,18 @@
         (filter 
           (lambda (r)
             (not (null? (identifier-reference-document r))))
-          (if (null? prefix)
-            (find-available-references-for document target-index-node)
-            (find-available-references-for document target-index-node prefix)))))))
+          (apply append 
+            (map 
+              root-ancestor
+              (if (symbol? prefix) 
+                (find-available-references-for document target-index-node prefix)
+                (find-available-references-for document target-index-node)))))))))
 
 ; https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#location
 (define (identifier-reference->location->alist reference)
   (location->alist
     (make-location 
-      (document-uri (identifier-reference-document reference)) 
+      (document-uri (identifier-reference-document reference))
       (make-range 
         (int+text->position (index-node-start (identifier-reference-index-node reference)) (document-text (identifier-reference-document reference)))
         (int+text->position (index-node-end (identifier-reference-index-node reference)) (document-text (identifier-reference-document reference)))))))

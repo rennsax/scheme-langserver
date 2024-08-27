@@ -1,5 +1,7 @@
 (library (scheme-langserver analysis identifier rules library-import)
   (export 
+    library-import-process
+    invoke-library-process
     import-process
     import-references
     import-from-external-index-node
@@ -19,27 +21,45 @@
     (scheme-langserver virtual-file-system file-node))
 
 ; pointer 
-(define (import-process root-file-node root-library-node document index-node)
+(define (library-import-process root-file-node root-library-node document index-node)
   (let* ([ann (index-node-datum/annotations index-node)]
       [expression (annotation-stripped ann)])
     (match expression
-      [('library _ **1 ) 
-      ; this should not use 'guard', because it follows the library mechanism
+      [(_ fuzzy import-things **1) 
         (map 
           (lambda (child-node) (match-import index-node root-file-node root-library-node document child-node))
-          (index-node-children index-node))]
-      [('define-library _ **1 ) 
-      ; this should not use 'guard', because it follows the r7rs library mechanism(in sld)
-        (map 
-          (lambda (child-node) (match-import index-node root-file-node root-library-node document child-node))
-          (index-node-children index-node))]
-      [else 
-      ; this makes sense for ss/scm files
-        (try
-          (guard-for document index-node 'import '(chezscheme) '(rnrs) '(rnrs base) '(scheme))
-          (match-import index-node root-file-node root-library-node document index-node)
-          (except c [else '()]))])
+          (cddr (index-node-children index-node)))]
+      ; [('define-library _ **1 ) 
+      ; ; this should not use 'guard', because it follows the r7rs library mechanism(in sld)
+      ;   (map 
+      ;     (lambda (child-node) (match-import index-node root-file-node root-library-node document child-node))
+      ;     (index-node-children index-node))]
+      [else '()])
     index-node))
+
+(define (invoke-library-process root-file-node root-library-node document index-node)
+  (filter-empty-list 
+    (let* ([ann (index-node-datum/annotations index-node)]
+        [expression (annotation-stripped ann)]
+        [parent-index-node (index-node-parent index-node)])
+      (match expression
+        [(_ ('quote (library-identifier **1)) fuzzy ...) 
+          (append-references-into-ordered-references-for 
+            document 
+            parent-index-node 
+            (filter identifier-reference? (import-references root-library-node library-identifier)))]
+        [else '()]))))
+
+(define (import-process root-file-node root-library-node document index-node)
+  (filter-empty-list 
+    (let* ([ann (index-node-datum/annotations index-node)]
+        [expression (annotation-stripped ann)])
+      (match expression
+        [(_ dummy **1 ) 
+          (map 
+            (lambda (child-node) (match-clause index-node root-file-node root-library-node document child-node)) 
+            (cdr (index-node-children index-node)))]
+        [else '()]))))
 
 (define process-library-identifier-excluded-references 
   (case-lambda 
@@ -104,16 +124,7 @@
                     (index-node-references-import-in-this-node current-index-node)
                     current-references)))
 
-              (if (null? grand-parent-index-node)
-                (document-reference-list-set! 
-                  document
-                  (sort-identifier-references (append (document-reference-list document) current-references)))
-                (index-node-references-import-in-this-node-set! 
-                  grand-parent-index-node 
-                  (sort-identifier-references
-                    (append 
-                      (index-node-references-import-in-this-node grand-parent-index-node)
-                      current-references))))
+              (append-references-into-ordered-references-for document grand-parent-index-node current-references)
 
               (loop 
                 (cdr importion-index-node) 
@@ -122,16 +133,16 @@
                   (lambda (reference) 
                     (not (equal? current-identifier (identifier-reference-identifier reference))))
                   imported-references)))))]
-      [('except (library-identifier **1) identifier **1) 
+      [('except (library-identifier **1) (? symbol? identifier) **1) 
         (let ([tmp 
               (filter
                 (lambda (reference) 
                   (if (find (lambda(id) (not (equal? id (identifier-reference-identifier reference)))) identifier) #t #f))
                 (import-references root-library-node library-identifier))])
           (if (null? grand-parent-index-node)
-            (document-reference-list-set! 
+            (document-ordered-reference-list-set! 
               document
-              (sort-identifier-references (append (document-reference-list document) tmp)))
+              (sort-identifier-references (append (document-ordered-reference-list document) tmp)))
             (index-node-references-import-in-this-node-set! 
               grand-parent-index-node 
               (sort-identifier-references
@@ -166,7 +177,7 @@
                   (lambda (reference) 
                     (not (equal? current-identifier (identifier-reference-identifier reference))))
                   imported-references)))))]
-      [('prefix (library-identifier **1) prefix-id)
+      [('prefix (library-identifier **1) (? symbol? prefix-id))
         (let* ([imported-references (import-references root-library-node library-identifier)]
             [prefixed-references 
               (map 
@@ -182,17 +193,8 @@
                     (identifier-reference-type-expressions reference))) 
                 imported-references)])
           ;;todo: add something to export-to-other-node for current-index-node?
-          (if (null? grand-parent-index-node)
-            (document-reference-list-set! 
-              document
-              (sort-identifier-references (append (document-reference-list document) prefixed-references)))
-            (index-node-references-import-in-this-node-set! 
-              grand-parent-index-node 
-              (sort-identifier-references
-                (append 
-                  (index-node-references-import-in-this-node grand-parent-index-node)
-                  prefixed-references)))))]
-      [('rename (library-identifier **1) (external-name internal-name) **1 ) 
+          (append-references-into-ordered-references-for document grand-parent-index-node prefixed-references))]
+      [('rename (library-identifier **1) ((? symbol? external-name) (? symbol? internal-name)) **1 ) 
         (let loop ([importion-nodes (cddr (index-node-children index-node))]
             [external-names external-name]
             [internal-names internal-name]
@@ -233,16 +235,7 @@
                     (index-node-references-import-in-this-node current-internal-node)
                     current-references)))
 
-              (if (null? grand-parent-index-node)
-                (document-reference-list-set! 
-                  document
-                  (sort-identifier-references (append (document-reference-list document) renamed-references)))
-                (index-node-references-import-in-this-node-set! 
-                  grand-parent-index-node 
-                  (sort-identifier-references
-                    (append 
-                      (index-node-references-import-in-this-node grand-parent-index-node)
-                      renamed-references))))
+              (append-references-into-ordered-references-for document grand-parent-index-node renamed-references)
 
               (index-node-references-export-to-other-node-set! 
                 current-external-node
@@ -257,7 +250,7 @@
                   (lambda (reference) 
                     (not (equal? current-external-name (identifier-reference-identifier reference))))
                   imported-references)))))]
-      [('alias (library-identifier **1) (external-name internal-name) **1 ) 
+      [('alias (library-identifier **1) ((? symbol? external-name) (? symbol? internal-name)) **1 ) 
         (let loop ([importion-nodes (cddr (index-node-children index-node))]
             [external-names external-name]
             [internal-names internal-name]
@@ -298,27 +291,8 @@
                     (index-node-references-import-in-this-node current-internal-node)
                     current-references)))
 
-              (if (null? grand-parent-index-node)
-                (document-reference-list-set! 
-                  document
-                  (sort-identifier-references (append (document-reference-list document) current-references)))
-                (index-node-references-import-in-this-node-set! 
-                  grand-parent-index-node 
-                  (sort-identifier-references
-                    (append 
-                      (index-node-references-import-in-this-node grand-parent-index-node)
-                      current-references))))
-
-              (if (null? grand-parent-index-node)
-                (document-reference-list-set! 
-                  document
-                  (sort-identifier-references (append (document-reference-list document) renamed-references)))
-                (index-node-references-import-in-this-node-set! 
-                  grand-parent-index-node 
-                  (sort-identifier-references
-                    (append 
-                      (index-node-references-import-in-this-node grand-parent-index-node)
-                      renamed-references))))
+              (append-references-into-ordered-references-for document grand-parent-index-node current-references)
+              (append-references-into-ordered-references-for document grand-parent-index-node renamed-references)
 
               (index-node-references-export-to-other-node-set! 
                 current-external-node
@@ -342,23 +316,18 @@
             )
           (let ([tmp (filter identifier-reference? (import-references root-library-node library-identifier))])
             (if (null? grand-parent-index-node)
-              (document-reference-list-set! 
+              (document-ordered-reference-list-set! 
                 document
-                (sort-identifier-references (append (document-reference-list document) tmp)))
+                (sort-identifier-references (append (document-ordered-reference-list document) tmp)))
               (index-node-references-import-in-this-node-set! 
                 grand-parent-index-node 
                 (sort-identifier-references
                   (append (index-node-references-import-in-this-node grand-parent-index-node) tmp))))))]
       [(library-identifier **1) 
-        (let ([tmp (filter identifier-reference? (import-references root-library-node library-identifier))])
-          (if (null? grand-parent-index-node)
-            (document-reference-list-set! 
-              document
-              (sort-identifier-references (append (document-reference-list document) tmp)))
-            (index-node-references-import-in-this-node-set! 
-              grand-parent-index-node 
-              (sort-identifier-references
-                (append (index-node-references-import-in-this-node grand-parent-index-node) tmp)))))]
+        (append-references-into-ordered-references-for 
+          document 
+          grand-parent-index-node 
+          (filter identifier-reference? (import-references root-library-node library-identifier)))]
       [else '()])))
 
 (define (import-references root-library-node library-identifier)
@@ -406,7 +375,7 @@
   (let* ([ann (index-node-datum/annotations index-node)]
       [expression (annotation-stripped ann)])
     (match expression
-      [('rename (internal-names external-names) **1) 
+      [('rename ((? symbol? internal-names) (? symbol? external-names)) **1) 
         (let loop ([exportion-nodes (cdr (index-node-children index-node))]
             [result '()])
           (if (null? exportion-nodes)
@@ -414,6 +383,6 @@
             (loop 
               (cdr exportion-nodes)
               (append result (index-node-references-export-to-other-node (cadr (index-node-children (car exportion-nodes))))))))]
-      [identifier (index-node-references-export-to-other-node index-node)]
+      [(? symbol? identifier) (index-node-references-export-to-other-node index-node)]
       [else '()])))
 )

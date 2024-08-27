@@ -2,6 +2,21 @@
 
 Procedures and variable bindings are the fundamental building blocks of Scheme programs. In fact, most part of functionalities including auto-completion, goto definition, document symbol etc., all dependent on them. In this document, I'll describe what scheme-langserver do in analysis/identifier/rules directory. Following forms are from [the summary from csug 9.5](https://cisco.github.io/ChezScheme/csug9.5/summary.html#./summary:h0). These form should be caught by define-record-type.sls, lambda.sls, let.sls and so one. 
 
+### Abstract Interpreter
+Scheme-langserver's whole identifier catching mechanism is basically fully framed with [abstract interpreter](https://en.wikipedia.org/wiki/Abstract_interpretation). The most essential code located in [this file](../../analysis/abstract-interpreter.sls) now has initially exhibited my design in version 1.2.0. Its main purpose is to allow self-defined macros to introduce new library or identifiers in code, which is rare in main stream programming languages and deeply attract most scheme language programmers. 
+
+An example is from the macro in [try.sls](../../util/try.sls). It allows catching exceptions like in Java without any introduction of keywords:
+```scheme
+(try
+    ...
+    (except current-exception 
+        [condition do]
+        ...
+        [else ...]))
+```
+
+As you may see, `current-exception` is claimed as an identifier, and is bound with any exception. This identifier maybe used in rest body of `except`, and we all suppose scheme-langserver can help. And this feature will be implemented soon.
+
 ### Identifier binding forms in r6rs standard 
 In practice, these forms would produce [identifier-reference](../../analysis/identifier/reference.sls) and attach them to [index-nodes](../../virtual-file-system/index-node.sls). Specifically, one form would produce one unique identifier and attach it to `index-node-export-to-other-node`, `index-node-import-in-this-node`, and `index-node-excluded-references`. 
 
@@ -28,6 +43,11 @@ In practice, these forms would produce [identifier-reference](../../analysis/ide
 | define-top-level-syntax | (define-top-level-syntax symbol obj env)                           |
 | define-top-level-value  | (define-top-level-value symbol obj)                                |
 | define-top-level-value  | (define-top-level-value symbol obj env)                            |
+| top-level-value-set!    | (top-leve-value-set! symbol obj)                                   |
+| top-level-value-set!    | (top-leve-value-set! symbol obj env)                               |
+| top-level-syntax-set!   | (top-leve-syntax-set! symbol obj)                                  |
+| top-level-syntax-set!   | (top-leve-syntax-set! symbol obj env)                              |
+| set!                    | (set! symbol obj env)                                              |
 | fluid-let               | (fluid-let ((var expr) ...) body1 body2 ...)                       |
 | fluid-let-syntax        | (fluid-let-syntax ((keyword expr) ...) form1 form2 ...)            |
 | identifier-syntax       | (identifier-syntax tmpl)                                           |
@@ -48,8 +68,8 @@ In practice, these forms would produce [identifier-reference](../../analysis/ide
 | with-syntax             | (with-syntax ((pattern expr) ...) body1 body2 ...)                 |
 
 NOTE: 
-1.  `define-top-level-syntax`, `define-top-level-value` would bind identifiers to environment instead of library. Detailed catching rule would be programmed when I'm ready. 
-2.  `define-record` is only available to Chez Scheme, so I haven't been writing corresponding rules. A direct problem is whether `define-record` binding can make `define-record-type` binding as its parent.
+1. `define-top-level-syntax`, `define-top-level-value`,`top-level-value-set!`,`top-level-syntax-set!`,`set!` bind top-level identifiers within a sequential process. And I just claim their availability within document scope.
+2. I don't implement `environment` mechanism, because it's actually a dynamic scope.
 
 ### Identifier binding export/import/load in r6rs standard 
 Based on library framework, `export` and `import` would transfer identifier-references across libraries files. Specially, `load` will bind identifiers dynamically, I just try my best to analysis corresponding static code and roughly attach references to caller files.

@@ -4,6 +4,8 @@
     find-references-in
     guard-for
 
+    append-references-into-ordered-references-for 
+
     identifier-reference?
     make-identifier-reference
     identifier-reference-identifier
@@ -17,7 +19,11 @@
     identifier-reference-index-node
     identifier-reference-initialization-index-node
 
+    identifier-compare?
+
     transform
+
+    root-ancestor
     
     sort-identifier-references
     pure-identifier-reference-misture?
@@ -34,8 +40,8 @@
     (scheme-langserver virtual-file-system index-node)
 
     (scheme-langserver util binary-search)
-    (scheme-langserver util contain)
-    )
+    (scheme-langserver util dedupe)
+    (scheme-langserver util contain))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-record-type identifier-reference
   (fields
@@ -143,13 +149,24 @@
       (equal? 'inner:vector? expression) 
       (identifier-reference? expression))))
 
+(define (identifier-compare? target1 target2)
+  (string<=?
+    (symbol->string (identifier-reference-identifier target1))
+    (symbol->string (identifier-reference-identifier target2))))
+
+(define (append-references-into-ordered-references-for document index-node list)
+  (if (null? index-node)
+    (document-ordered-reference-list-set! document 
+      (ordered-dedupe 
+        (sort-identifier-references 
+          (append (document-ordered-reference-list document) list))))
+    (index-node-references-import-in-this-node-set! index-node
+      (ordered-dedupe 
+        (sort-identifier-references 
+          (append (index-node-references-import-in-this-node index-node) list))))))
+
 (define (sort-identifier-references identifier-references)
-  (sort 
-    (lambda (target1 target2) 
-      (string<=?
-        (symbol->string (identifier-reference-identifier target1))
-        (symbol->string (identifier-reference-identifier target2))))
-    identifier-references))
+  (sort identifier-compare? identifier-references))
 
 (define (guard-for document current-index-node target-identifier . library-identifier-rest)
   (let ([candidates (find-available-references-for document current-index-node target-identifier)])
@@ -222,7 +239,7 @@
           (append 
             (index-node-references-import-in-this-node current-index-node) 
             (if (null? (index-node-parent current-index-node))
-              (document-reference-list document) 
+              (document-ordered-reference-list document) 
               (find-available-references-for document (index-node-parent current-index-node)))))]
     [(document current-index-node identifier) 
       (find-available-references-for document current-index-node identifier '())]
@@ -235,7 +252,7 @@
               current-exclude)])
         (if (null? tmp-result)
           (if (null? (index-node-parent current-index-node))
-            (private-binary-search (document-reference-list document) identifier current-exclude)
+            (private-binary-search (document-ordered-reference-list document) identifier current-exclude)
             (find-available-references-for document (index-node-parent current-index-node) identifier current-exclude))
           tmp-result))]))
 
@@ -243,10 +260,7 @@
   (let ([prev
         (binary-search
           (list->vector reference-list)
-          (lambda (reference0 reference1)
-            (string<=?
-              (symbol->string (identifier-reference-identifier reference0))
-              (symbol->string (identifier-reference-identifier reference1))))
+          identifier-compare?
           (make-identifier-reference identifier '() '() '() '() '() '() '()))])
     (filter
       (lambda (reference)
@@ -256,6 +270,11 @@
               (equal? ex-reference reference))
             exclude)))
         prev)))
+
+(define (root-ancestor identifier-reference)
+  (if (null? (identifier-reference-parents identifier-reference))
+    `(,identifier-reference)
+    (apply append (map root-ancestor (identifier-reference-parents identifier-reference)))))
 
 (define (find-references-in document index-node available-references predicate?)
   (let* ([ann (index-node-datum/annotations index-node)]
