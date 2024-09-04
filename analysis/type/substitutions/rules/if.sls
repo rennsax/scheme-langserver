@@ -26,8 +26,7 @@
             (append
               `((,(index-node-variable condition-index-node) = something?)
                 (,(index-node-variable index-node) = void?))
-              (construct-substitutions-between-index-nodes index-node return-index-node '=)
-              (construct-substitutions-between-index-nodes return-index-node index-node '=)))]
+              (construct-substitutions-between-index-nodes index-node return-index-node '=)))]
         [('if _  clause0 clause1) 
           (guard-for document index-node 'lambda '(chezscheme) '(rnrs) '(rnrs base) '(scheme))
           (let ([condition-index-node (cadr children)]
@@ -36,9 +35,7 @@
             (append
               `((,(index-node-variable condition-index-node) = something?))
               (construct-substitutions-between-index-nodes index-node return-index-node0 '=)
-              (construct-substitutions-between-index-nodes index-node return-index-node1 '=)
-              (construct-substitutions-between-index-nodes return-index-node0 index-node '=)
-              (construct-substitutions-between-index-nodes return-index-node1 index-node '=)))]
+              (construct-substitutions-between-index-nodes index-node return-index-node1 '=)))]
         [('cond clause **1)
           (guard-for document index-node 'cond '(chezscheme) '(rnrs) '(rnrs base) '(scheme))
           (apply 
@@ -85,7 +82,6 @@
       [(predicator tail **1) 
         (append
           `((,(index-node-variable first-child) = something?))
-          (construct-substitutions-between-index-nodes root-index-node last-child '=)
-          (construct-substitutions-between-index-nodes last-child root-index-node '=)) ]
+          (construct-substitutions-between-index-nodes root-index-node last-child '=)) ]
       [else '()])))
 )
