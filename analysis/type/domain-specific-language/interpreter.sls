@@ -331,7 +331,10 @@
           ;   (if (type:<- denotion input env)
           ;     left
           ;     (riase 'macro-not-match))]
-          [(identifier-reference? denotion) (or (type:->? left denotion PRIVATE-MAX-DEPTH env memory) (type:<-? left denotion PRIVATE-MAX-DEPTH env memory))]
+          [(identifier-reference? denotion) 
+            (if (or (type:->? left denotion PRIVATE-MAX-DEPTH env memory) (type:<-? left denotion PRIVATE-MAX-DEPTH env memory))
+              left
+              (raise 'error:type:->/<-?))]
           [(and (list? denotion) (list? input)) 
             (if (candy:matchable? denotion input)
               (if (or (contain? input '**1) (contain? input '...))
