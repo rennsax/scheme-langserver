@@ -68,7 +68,7 @@
 (define type:->?
   (case-lambda
     [(left right env) (type:->? left right env PRIVATE-MAX-DEPTH)]
-    [(left right env max-depth) (type:->? left right env PRIVATE-MAX-DEPTH '())]
+    [(left right env max-depth) (type:->? left right env max-depth '())]
     [(left right env max-depth memory) 
       (cond
         [(equal? left right) #t]
